@@ -24,13 +24,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  *    TIMESTAMP_UTC binding round-trips the Instant with ZERO drift across JVM
  *    time zones. This is the certain, headline assertion.
  *
- *  - On the zone-less column (`timestamp` / created_at), the default binding does
- *    NOT make the pairing safe. Hibernate would emit `timestamptz` for this field
- *    under schema generation, so `ddl-auto: validate` REJECTS the zone-less column
- *    (see README). At runtime, writing a UTC/offset value into a zone-less column
- *    goes through an implicit `timestamptz -> timestamp` cast using the Postgres
- *    session time zone, which is driver/session dependent. We therefore only
- *    OBSERVE (print) that column here rather than asserting an exact value.
+ *  - On the zone-less column (`timestamp` / created_at), PostgreSQL maps the
+ *    Instant (TIMESTAMP_UTC) to a plain `timestamp` at the DDL/validation level, so
+ *    `ddl-auto: validate` PASSES and the round-trip does NOT drift either. We print a
+ *    `drifted?` verdict for it. The residual concern is semantic (the raw column has
+ *    no zone marker, so non-Hibernate readers must know it is UTC) and portability
+ *    (other dialects may map TIMESTAMP_UTC to timestamptz).
  */
 @SpringBootTest // no preferred_instant_jdbc_type -> Hibernate 7 default (TIMESTAMP_UTC)
 @DisplayName("Hibernate 7 default binding (TIMESTAMP_UTC): timestamptz is drift-free")

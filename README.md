@@ -45,11 +45,10 @@ A Spring Boot 4.1 a Hibernate 7-et hozza. Az `Instant` kezelése lényegesen
 eltér a régi (Hibernate 5-ös) viselkedéstől, és ezt érdemes pontosan érteni.
 
 **Mi változott.** A Hibernate 6 óta az `Instant` alapértelmezetten a
-`TIMESTAMP_UTC` JDBC-típuskódra képződik le. Ez a típus — ha a dialektus tudja —
-`timestamp with time zone` SQL-típust céloz, és csak annak hiányában esik vissza
-sima `timestamp`-re. A `TIMESTAMP_UTC` kötés **UTC-naptárral** ír és olvas, tehát
-sem a JVM alapértelmezett zónája, sem a `hibernate.jdbc.time_zone` nem befolyásolja.
-A régi (Hibernate 5-ös) viselkedést a következővel lehet visszakapcsolni:
+`TIMESTAMP_UTC` JDBC-típuskódra képződik le, amit a Hibernate **UTC-naptárral** ír
+és olvas — tehát sem a JVM alapértelmezett zónája, sem a `hibernate.jdbc.time_zone`
+nem befolyásolja. A régi (Hibernate 5-ös) viselkedést a következővel lehet
+visszakapcsolni:
 
 ```properties
 spring.jpa.properties.hibernate.type.preferred_instant_jdbc_type=TIMESTAMP
@@ -60,26 +59,36 @@ JVM/JDBC-zónán keresztül konvertálódik, így egy zóna nélküli `timestamp
 **elcsúszik**. Az alapértelmezett `TIMESTAMP_UTC` kötéssel a naiv drift **nem**
 jelentkezik.
 
-**De ettől a zóna nélküli `timestamp` + `Instant` páros NEM lesz „bátran
-használható".** Az alapértelmezés csak akkor tiszta, ha az oszlop is `timestamptz`.
-Zóna nélküli `timestamp` oszloppal két probléma marad:
+**PostgreSQL-en a `timestamp` + `Instant` páros az alapértelmezéssel valójában
+működik.** A PostgreSQL Hibernate-dialektusa a `TIMESTAMP_UTC`-t DDL/validáció
+szinten **sima `timestamp`-re** képezi (nem `timestamptz`-re), ezért:
 
-1. **Séma-eltérés / validációs hiba.** A Hibernate az `Instant`-hoz a
-   `timestamptz`-t preferálja. Ha bekapcsolod a `spring.jpa.hibernate.ddl-auto=validate`-et,
-   az alkalmazás **indításkor eltörik** egy ilyen jellegű hibával:
-   `found [timestamp ...], but expecting [timestamp with time zone (Types#TIMESTAMP_UTC)]`.
-   Ebben a demóban ez azért nem robban, mert `ddl-auto: none` van beállítva.
+- `spring.jpa.hibernate.ddl-auto=validate` **átmegy** — nincs séma-eltérés az
+  `Instant` mező és a `timestamp` oszlop között (ezt élőben is kipróbáltuk).
+- A round-trip **nem csúszik el**, mert a Hibernate írásnál és olvasásnál is UTC-t
+  használ (a `DefaultBindingTest` `drifted? false`-t ír ki a zóna nélküli oszlopra).
 
-2. **Driver/session-függő tárolás.** Ha mégis zóna nélküli oszlopba írsz egy
-   `TIMESTAMP_UTC`-kötésű értéket, a Postgres egy implicit `timestamptz -> timestamp`
-   castot végez a **session időzónája** szerint (amit a pgjdbc a kapcsolat
-   létrejöttekor a JVM-zónából állít be). Vagyis a nyers tárolt érték
-   kiszámíthatatlanabbá válik, és a Hibernate-en kívüli olvasók számára továbbra is
-   kétértelmű.
+Fontos: a Hibernate 6 migrációs útmutató szerint a `TIMESTAMP_UTC` váltás **egyes**
+adatbázisokon okozhat séma-validációs hibát (ahol a típus `timestamp with time zone`-ra
+képződik) — de a PostgreSQL nem tartozik ezek közé.
 
-**Következtetés.** A helyes megoldás minden esetben ugyanaz: az oszlop legyen
-`timestamptz`. Akkor a Hibernate preferált típusa és a tényleges oszlop egybeesik,
-a séma-validáció rendben, és mindenki egyértelmű abszolút időpontként látja.
+**Akkor mégis mi a maradék kockázat?** Két dolog:
+
+1. **Szemantikai kétértelműség kifelé.** A zóna nélküli oszlop nem hordozza, hogy a
+   tárolt érték UTC. Amíg csak a Hibernate ír/olvas, konzisztens; de bármely más
+   olvasó (natív SQL, riporting eszköz, másik szolgáltatás, DB-oldali
+   `CURRENT_TIMESTAMP` default vagy összehasonlítás) a session-zónája szerint
+   értelmezheti — itt visszajön a kétértelműség, csak a DB rétegében.
+
+2. **Hordozhatóság és a régi kötés.** Más adatbázison a `TIMESTAMP_UTC` `timestamptz`-ra
+   képződhet (séma-validációs eltérés), illetve ha bárki bekapcsolja a
+   `preferred_instant_jdbc_type=TIMESTAMP` kötést, a drift visszatér a zóna nélküli
+   oszlopon.
+
+**Következtetés.** PostgreSQL + Hibernate 7 alapértelmezéssel a `timestamp` + `Instant`
+technikailag rendben van (validate átmegy, nincs drift). Ha viszont egyértelmű,
+hordozható és a DB-n kívüli olvasók számára sem félreérthető sémát akarsz, a `timestamptz`
+a tiszta választás — és ez teszi feleslegessé a régi kötéssel járó kockázatokat is.
 
 ## Tesztek futtatása
 
@@ -89,11 +98,11 @@ mvn test
 
 ### Teszt-mátrix (a property-vel és anélkül)
 
-| Teszt                             | `preferred_instant_jdbc_type`                       | Oszlop a fókuszban              | Mit bizonyít                                                                     |
-|-----------------------------------|-----------------------------------------------------|---------------------------------|----------------------------------------------------------------------------------|
-| `TimestampVsTimestamptzDriftTest` | `TIMESTAMP` (régi kötés)                            | `created_at` (`timestamp`)      | **Elcsúszik** a JVM-zónák közt; a `timestamptz` oszlop stabil                    |
-| `DefaultBindingTest`              | nincs (Hibernate 7 alapértelmezés, `TIMESTAMP_UTC`) | `created_at_tz` (`timestamptz`) | A helyes párosítás **nem csúszik el**; a zóna nélküli oszlopot csak megfigyeljük |
-| `JdbcTimeZoneUtcFixTest`          | `TIMESTAMP` (régi kötés) + `jdbc.time_zone=UTC`     | `created_at` (`timestamp`)      | A config-szintű javítás **megszünteti** a driftet a zóna nélküli oszlopon        |
+| Teszt | `preferred_instant_jdbc_type` | Oszlop a fókuszban | Mit bizonyít |
+|-------|-------------------------------|--------------------|--------------|
+| `TimestampVsTimestamptzDriftTest` | `TIMESTAMP` (régi kötés) | `created_at` (`timestamp`) | **Elcsúszik** a JVM-zónák közt; a `timestamptz` oszlop stabil |
+| `DefaultBindingTest` | nincs (Hibernate 7 alapértelmezés, `TIMESTAMP_UTC`) | `created_at_tz` (`timestamptz`) | A helyes párosítás **nem csúszik el**; a zóna nélküli oszlopot csak megfigyeljük |
+| `JdbcTimeZoneUtcFixTest` | `TIMESTAMP` (régi kötés) + `jdbc.time_zone=UTC` | `created_at` (`timestamp`) | A config-szintű javítás **megszünteti** a driftet a zóna nélküli oszlopon |
 
 ### Mit bizonyítanak az egyes tesztek
 
@@ -115,11 +124,12 @@ A `timestamp` érték a New York↔Tokió eltolódással csúszik el; a `timesta
 érték stabil marad.
 
 **`DefaultBindingTest`** — nincs beállítva a `preferred_instant_jdbc_type`, tehát a
-Hibernate 7 alapértelmezett `TIMESTAMP_UTC` kötése fut. A teszt azt bizonyítja, hogy
-a **helyes** párosításnál (`timestamptz` oszlop) az `Instant` a JVM-zóna váltása
-ellenére **nem csúszik el**. A zóna nélküli oszlopot itt csak kiírjuk
-(megfigyelésként), mert annak tárolt értéke — a fent leírt implicit cast miatt —
-driver/session-függő, és éles `ddl-auto: validate` mellett eleve séma-hibát adna.
+Hibernate 7 alapértelmezett `TIMESTAMP_UTC` kötése fut. A teszt bizonyítja, hogy a
+`timestamptz` oszlopon az `Instant` a JVM-zóna váltása ellenére **nem csúszik el**, és
+kiír egy `drifted?` verdiktet a zóna nélküli `timestamp` oszlopra is. PostgreSQL-en ez
+utóbbi is `false` (nincs drift), és a `ddl-auto: validate` is átmegy — a zóna nélküli
+`timestamp` oszlop tehát az alapértelmezéssel működik; a `timestamptz` viszont
+egyértelműbb és hordozhatóbb (lásd fent).
 
 **`JdbcTimeZoneUtcFixTest`** — ugyanaz mint az első teszt (régi kötéssel), de
 beállított `spring.jpa.properties.hibernate.jdbc.time_zone=UTC`-vel. Így a zóna
@@ -159,3 +169,38 @@ csúszik el, pedig az oszlop típusa változatlan.
    igazán tiszta, ha az oszlop is `timestamptz` (különben séma-eltérés marad az
    `Instant` preferált típusa és a tényleges oszloptípus közt). Vagyis ez a
    lehetőség a gyakorlatban visszavezet az 1. ponthoz.
+
+## Spring Boot 4 buktató: modularizált auto-config
+
+A Spring Boot 4 szétbontotta a korábban monolitikus `spring-boot-autoconfigure`-t
+kisebb, fókuszált modulokra. Emiatt bizonyos auto-configuration már **nem aktiválódik
+pusztán attól, hogy a megfelelő library a classpathon van** — külön modult is fel kell
+venni. A Liquibase esetén a `LiquibaseAutoConfiguration` a `spring-boot-liquibase`
+modulban él, ezért a `pom.xml` tartalmazza:
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-liquibase</artifactId>
+</dependency>
+```
+
+E nélkül a `liquibase-core` önmagában a classpathon van ugyan, de a Liquibase induláskor
+nem fut le, a tábla nem jön létre, és minden lekérdezés `relation "example" does not exist`
+hibával bukik. (Ugyanez a minta más területeknél is előfordulhat Boot 4-ben, pl. H2 konzol.)
+
+## Megjegyzés a build-ellenőrzésről
+
+Ezt a verziófrissítést (Spring Boot 4.1.0 + Java 25) az elkészítés környezetében
+nem tudtam ténylegesen lefordítani/futtatni (nem volt Java 25, és a Maven Central
+sem volt elérhető), úgyhogy futtasd le lokálisan a `mvn test`-et. Ha bármelyik
+assert eltér a várttól, először a Hibernate 7-es `Instant`-kötést ellenőrizd a
+fentiek szerint.
+
+## Futtatás valódi Postgres ellen Testcontainers helyett
+
+```bash
+docker compose up -d
+# majd indítsd az alkalmazást; a datasource előre be van állítva az application.yml-ben
+mvn spring-boot:run
+```
