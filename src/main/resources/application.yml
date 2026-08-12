@@ -1,0 +1,30 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+        # ---------------------------------------------------------------------
+        # Hibernate 7 note (Spring Boot 4.1):
+        # Since Hibernate 6, `Instant` maps to JDBC type TIMESTAMP_UTC by default,
+        # which is bound/read with a UTC calendar. That means the naive JVM-zone
+        # drift is already avoided for Instant out of the box -- at the cost of a
+        # schema mismatch against a `timestamp without time zone` column (Hibernate
+        # would prefer `timestamptz`). The tests pin the legacy binding
+        # (type.preferred_instant_jdbc_type=TIMESTAMP) to reproduce the classic drift.
+        #
+        # The config-level fix for the legacy binding. Uncomment to force UTC at the
+        # JDBC layer regardless of the JVM default zone:
+        #
+        # jdbc:
+        #   time_zone: UTC
+        # ---------------------------------------------------------------------
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+  datasource:
+    # URL/username/password are injected by Testcontainers in tests,
+    # or by docker-compose.yml + the values below when running for real.
+    url: jdbc:postgresql://localhost:5432/tzdemo
+    username: tzdemo
+    password: tzdemo

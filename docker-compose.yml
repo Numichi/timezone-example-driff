@@ -1,0 +1,9 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: tzdemo
+      POSTGRES_USER: tzdemo
+      POSTGRES_PASSWORD: tzdemo
+    ports:
+      - "5432:5432"

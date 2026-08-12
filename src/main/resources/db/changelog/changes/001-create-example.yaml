@@ -1,0 +1,35 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-example
+      author: demo
+      changes:
+        - createTable:
+            tableName: example
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: amount
+                  type: integer
+                  defaultValueNumeric: "0"
+              # PROBLEM: `timestamp` maps to TIMESTAMP WITHOUT TIME ZONE on Postgres.
+              # Paired with Instant in Java -> drift through the JVM default time zone.
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              # FIX at the schema level: TIMESTAMP WITH TIME ZONE (timestamptz).
+              # This is the semantically correct match for Instant -> no drift.
+              - column:
+                  name: created_at_tz
+                  type: timestamp with time zone
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
