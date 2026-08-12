@@ -66,7 +66,7 @@ class TimestampVsTimestamptzDriftTest extends AbstractPostgresTest {
         TimeZone.setDefault(TimeZone.getTimeZone("America/New_York")); // UTC-5 in January
         Long id = txTemplate.execute(status -> {
             Example example = new Example();
-            example.setAmount(100);
+            example.setValue(100);
             example.setCreatedAt(ORIGINAL);    // -> `timestamp` column (no zone)
             example.setCreatedAtTz(ORIGINAL);  // -> `timestamptz` column
             return exampleRepository.save(example).getId();

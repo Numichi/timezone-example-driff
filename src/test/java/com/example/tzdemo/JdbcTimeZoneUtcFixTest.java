@@ -65,7 +65,7 @@ class JdbcTimeZoneUtcFixTest extends AbstractPostgresTest {
         TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"));
         Long id = txTemplate.execute(status -> {
             Example example = new Example();
-            example.setAmount(100);
+            example.setValue(100);
             example.setCreatedAt(ORIGINAL);
             example.setCreatedAtTz(ORIGINAL);
             return exampleRepository.save(example).getId();

@@ -17,8 +17,8 @@ public class Example {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "amount")
-    private int amount;
+    @Column(name = "value")
+    private int value;
 
     /**
      * Mapped to a Postgres column of type `timestamp` (== TIMESTAMP WITHOUT TIME ZONE).
@@ -42,12 +42,12 @@ public class Example {
         return id;
     }
 
-    public int getAmount() {
-        return amount;
+    public int getValue() {
+        return value;
     }
 
-    public void setAmount(int amount) {
-        this.amount = amount;
+    public void setValue(int amount) {
+        this.value = amount;
     }
 
     public Instant getCreatedAt() {

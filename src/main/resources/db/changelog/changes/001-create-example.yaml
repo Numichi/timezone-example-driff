@@ -14,7 +14,7 @@ databaseChangeLog:
                     primaryKey: true
                     nullable: false
               - column:
-                  name: amount
+                  name: value
                   type: integer
                   defaultValueNumeric: "0"
               # PROBLEM: `timestamp` maps to TIMESTAMP WITHOUT TIME ZONE on Postgres.
