@@ -89,6 +89,11 @@ class DefaultBindingTest extends AbstractPostgresTest {
         System.out.println("[default binding] read back `created_at`     : " + reloaded.getCreatedAt()   + "   (observe only)");
         System.out.println("[default binding] read back `created_at_tz`  : " + reloaded.getCreatedAtTz());
 
+        // Clear verdict for the zone-less column under the default TIMESTAMP_UTC binding:
+        boolean zoneLessDrifted = !reloaded.getCreatedAt().equals(ORIGINAL);
+        System.out.println("[default binding] `created_at` (timestamp, no zone) drifted? " + zoneLessDrifted
+                + "   original=" + ORIGINAL + " readBack=" + reloaded.getCreatedAt());
+
         // CERTAIN: with the correct column type, the Hibernate 7 default binding
         // is zone-independent -> the Instant survives a cross-zone round trip.
         assertThat(reloaded.getCreatedAtTz())
