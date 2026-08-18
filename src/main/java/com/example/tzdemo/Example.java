@@ -18,7 +18,7 @@ public class Example {
     private Long id;
 
     @Column(name = "value")
-    private int value;
+    private String value;
 
     /**
      * Mapped to a Postgres column of type `timestamp` (== TIMESTAMP WITHOUT TIME ZONE).
@@ -42,12 +42,12 @@ public class Example {
         return id;
     }
 
-    public int getValue() {
+    public String getValue() {
         return value;
     }
 
-    public void setValue(int amount) {
-        this.value = amount;
+    public void setValue(String value) {
+        this.value = value;
     }
 
     public Instant getCreatedAt() {
